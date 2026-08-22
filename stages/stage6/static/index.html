@@ -1,0 +1,127 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sensor Triage</title>
+<style>
+  :root { --line:#e2e5ea; --muted:#5f6672; --ink:#1a1d26; }
+  body { font:15px/1.5 system-ui, sans-serif; color:var(--ink);
+         max-width:760px; margin:40px auto; padding:0 20px; }
+  h1 { font-size:26px; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 28px; }
+  label { display:block; font-size:11px; letter-spacing:.5px; text-transform:uppercase;
+          color:var(--muted); margin-bottom:4px; }
+  input, select, button { font:inherit; padding:8px 10px; border:1px solid var(--line);
+                          border-radius:6px; background:#fff; }
+  button { background:var(--ink); color:#fff; border:none; cursor:pointer; font-weight:600; }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:20px; }
+  .result { border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:28px; }
+  .verdict { font-size:26px; font-weight:700; letter-spacing:.5px; }
+  .normal { color:#0a7d28; } .warning { color:#a85f00; } .critical { color:#c0392b; }
+  .meta { font-size:12px; color:var(--muted); margin-top:2px; }
+  .advice { margin-top:14px; padding-top:14px; border-top:1px dashed var(--line); }
+  .advice em { color:var(--muted); }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.5px;
+       color:var(--muted); border-bottom:2px solid var(--line); padding:6px 8px; }
+  td { padding:8px; border-bottom:1px solid #f0f1f3; font-size:13px; vertical-align:top; }
+</style>
+
+<h1>Sensor Triage</h1>
+<p class="sub">Your code decides how serious the reading is. The AI explains what it means.</p>
+
+<div class="row">
+  <div style="flex:1; min-width:240px">
+    <label for="preset">Scenario</label>
+    <select id="preset" style="width:100%"></select>
+  </div>
+  <div style="width:110px">
+    <label for="value">Reading</label>
+    <input id="value" type="number" step="any" style="width:100%">
+  </div>
+  <button id="send">Send</button>
+</div>
+
+<div class="result" id="result" hidden>
+  <div class="verdict" id="verdict"></div>
+  <div class="meta" id="rule"></div>
+  <div class="advice" id="advice"></div>
+</div>
+
+<table>
+  <thead>
+    <tr><th style="width:80px">Time</th><th>Reading</th>
+        <th style="width:90px">Severity</th><th>Explanation</th></tr>
+  </thead>
+  <tbody id="history"></tbody>
+</table>
+
+<script>
+const PRESETS = [
+  { name:"Body temperature",  sensor:"body_temp",     unit:"C",   low:36.1, high:37.2, demo:39.4 },
+  { name:"Heart rate",        sensor:"heart_rate",    unit:"bpm", low:60,   high:100,  demo:142  },
+  { name:"Blood oxygen",      sensor:"spo2",          unit:"%",   low:95,   high:100,  demo:88   },
+  { name:"Indoor CO2",        sensor:"co2",           unit:"ppm", low:400,  high:1000, demo:1450 },
+  { name:"Power draw",        sensor:"power_draw",    unit:"W",   low:0,    high:3500, demo:4800 },
+  { name:"Soil moisture",     sensor:"soil_moisture", unit:"%",   low:30,   high:70,   demo:8    },
+  { name:"Motor temperature", sensor:"motor_temp",    unit:"C",   low:20,   high:60,   demo:87   },
+];
+
+const $ = id => document.getElementById(id);
+let current = PRESETS[0];
+
+$("preset").innerHTML = PRESETS
+  .map((p, i) => `<option value="${i}">${p.name} — safe ${p.low}–${p.high} ${p.unit}</option>`)
+  .join("");
+
+function applyPreset() {
+  current = PRESETS[$("preset").value];
+  $("value").value = current.demo;
+}
+$("preset").addEventListener("change", applyPreset);
+applyPreset();
+
+$("send").addEventListener("click", async () => {
+  const value = parseFloat($("value").value);
+  if (Number.isNaN(value)) { alert("Reading must be a number."); return; }
+
+  $("send").disabled = true;
+  $("send").textContent = "Asking…";
+  try {
+    const res = await fetch("/readings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sensor: current.sensor, value,
+        unit: current.unit, low: current.low, high: current.high,
+      }),
+    });
+    if (!res.ok) throw new Error("Server returned " + res.status);
+    const data = await res.json();
+
+    $("result").hidden = false;
+    $("verdict").className = "verdict " + data.severity;
+    $("verdict").textContent = data.severity.toUpperCase();
+    $("rule").textContent =
+      `your code checked: ${current.low} ≤ ${value} ≤ ${current.high}`;
+    $("advice").innerHTML = `${data.reason}<br><em>${data.action}</em>`;
+    await loadHistory();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    $("send").disabled = false;
+    $("send").textContent = "Send";
+  }
+});
+
+async function loadHistory() {
+  const rows = await (await fetch("/readings")).json();
+  $("history").innerHTML = rows.length
+    ? rows.map(r => `<tr>
+        <td>${(r.created || "").slice(11)}</td>
+        <td>${r.sensor} ${r.value}${r.unit}</td>
+        <td class="${r.severity}"><strong>${r.severity}</strong></td>
+        <td>${r.reason || ""}</td></tr>`).join("")
+    : `<tr><td colspan="4" style="color:var(--muted)">No readings yet.</td></tr>`;
+}
+loadHistory();
+</script>

@@ -1,0 +1,18 @@
+# Render reads this file and sets the whole service up for you.
+services:
+  - name: sensor-triage
+    type: web
+    runtime: python
+    plan: free                    # no credit card required
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health      # Render calls this to check the app is alive
+    envVars:
+      - key: USE_MOCK
+        value: "true"             # change to "false" once you add a key
+
+      # 'sync: false' means: this setting exists, but its value is typed
+      # into the Render dashboard, never written in this file.
+      # This file is uploaded to GitHub. A key must never be in it.
+      - key: ANTHROPIC_API_KEY
+        sync: false
