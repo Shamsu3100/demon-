@@ -61,7 +61,9 @@ working, and you know what a server and an API are, start at Part 2.
 
 ## The companion repository
 
-Every stage of Part 2 exists as a complete, working folder:
+**<https://github.com/Shamsu3100/demon->**
+
+Every stage of Part 2 exists there as a complete, working folder:
 
 ```
 stages/stage1     a server that answers
