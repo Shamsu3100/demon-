@@ -15,8 +15,6 @@
   #result { border:1px solid #e2e5ea; border-radius:10px; padding:22px; }
   .verdict { font-size:30px; font-weight:700; letter-spacing:.5px; }
   .rule { font-size:13px; color:#5f6672; margin-top:4px; }
-  .advice { margin-top:16px; padding-top:16px; border-top:1px dashed #e2e5ea; }
-  .advice em { color:#5f6672; }
   .normal { color:#0a7d28; } .warning { color:#a85f00; } .critical { color:#c0392b; }
   table { width:100%; border-collapse:collapse; margin-top:28px; }
   th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.5px;
@@ -25,7 +23,7 @@
 </style>
 
 <h1>Sensor Triage</h1>
-<p class="sub">Stage 5 — the AI now explains what each reading means.</p>
+<p class="sub">Stage 4 — every reading is now saved and listed below.</p>
 
 <div class="row">
   <div style="flex:1; min-width:250px">
@@ -43,8 +41,7 @@
 
 <table>
   <thead>
-    <tr><th style="width:80px">Time</th><th style="width:170px">Reading</th>
-        <th style="width:90px">Severity</th><th>Explanation</th></tr>
+    <tr><th style="width:90px">Time</th><th>Reading</th><th style="width:100px">Severity</th></tr>
   </thead>
   <tbody id="history"></tbody>
 </table>
@@ -93,8 +90,7 @@ $("send").addEventListener("click", async () => {
 
   $("result").innerHTML =
     `<div class="verdict ${data.severity}">${data.severity.toUpperCase()}</div>
-     <div class="rule">your code checked: ${current.low} &le; ${value} &le; ${current.high}</div>
-     <div class="advice">${data.reason}<br><em>${data.action}</em></div>`;
+     <div class="rule">your code checked: ${current.low} &le; ${value} &le; ${current.high}</div>`;
 
   loadHistory();
 });
@@ -106,9 +102,8 @@ async function loadHistory() {
     ? rows.map(r => `<tr>
         <td>${(r.created || "").slice(11)}</td>
         <td>${r.sensor} ${r.value}${r.unit}</td>
-        <td class="${r.severity}"><strong>${r.severity}</strong></td>
-        <td>${r.reason || ""}</td></tr>`).join("")
-    : `<tr><td colspan="4" style="color:#5f6672">Nothing stored yet.</td></tr>`;
+        <td class="${r.severity}"><strong>${r.severity}</strong></td></tr>`).join("")
+    : `<tr><td colspan="3" style="color:#5f6672">Nothing stored yet.</td></tr>`;
 }
 loadHistory();
 </script>

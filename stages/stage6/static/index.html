@@ -2,35 +2,33 @@
 <meta charset="utf-8">
 <title>Sensor Triage</title>
 <style>
-  :root { --line:#e2e5ea; --muted:#5f6672; --ink:#1a1d26; }
-  body { font:15px/1.5 system-ui, sans-serif; color:var(--ink);
-         max-width:760px; margin:40px auto; padding:0 20px; }
-  h1 { font-size:26px; margin:0 0 4px; }
-  p.sub { color:var(--muted); margin:0 0 28px; }
-  label { display:block; font-size:11px; letter-spacing:.5px; text-transform:uppercase;
-          color:var(--muted); margin-bottom:4px; }
-  input, select, button { font:inherit; padding:8px 10px; border:1px solid var(--line);
-                          border-radius:6px; background:#fff; }
-  button { background:var(--ink); color:#fff; border:none; cursor:pointer; font-weight:600; }
-  button:disabled { opacity:.5; cursor:default; }
-  .row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:20px; }
-  .result { border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:28px; }
-  .verdict { font-size:26px; font-weight:700; letter-spacing:.5px; }
+  body { font:16px/1.6 system-ui, sans-serif; color:#1a1d26;
+         max-width:720px; margin:50px auto; padding:0 20px; }
+  h1 { font-size:28px; margin:0 0 6px; }
+  p.sub { color:#5f6672; margin:0 0 28px; }
+  label { display:block; font-size:11px; letter-spacing:.5px;
+          text-transform:uppercase; color:#5f6672; margin-bottom:4px; }
+  select, input, button { font:inherit; padding:9px 11px;
+          border:1px solid #e2e5ea; border-radius:6px; background:#fff; }
+  button { background:#1a1d26; color:#fff; border:none; cursor:pointer; font-weight:600; }
+  .row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:24px; }
+  #result { border:1px solid #e2e5ea; border-radius:10px; padding:22px; }
+  .verdict { font-size:30px; font-weight:700; letter-spacing:.5px; }
+  .rule { font-size:13px; color:#5f6672; margin-top:4px; }
+  .advice { margin-top:16px; padding-top:16px; border-top:1px dashed #e2e5ea; }
+  .advice em { color:#5f6672; }
   .normal { color:#0a7d28; } .warning { color:#a85f00; } .critical { color:#c0392b; }
-  .meta { font-size:12px; color:var(--muted); margin-top:2px; }
-  .advice { margin-top:14px; padding-top:14px; border-top:1px dashed var(--line); }
-  .advice em { color:var(--muted); }
-  table { width:100%; border-collapse:collapse; }
+  table { width:100%; border-collapse:collapse; margin-top:28px; }
   th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.5px;
-       color:var(--muted); border-bottom:2px solid var(--line); padding:6px 8px; }
-  td { padding:8px; border-bottom:1px solid #f0f1f3; font-size:13px; vertical-align:top; }
+       color:#5f6672; border-bottom:2px solid #e2e5ea; padding:6px 8px; }
+  td { padding:8px; border-bottom:1px solid #f0f1f3; font-size:14px; }
 </style>
 
 <h1>Sensor Triage</h1>
-<p class="sub">Your code decides how serious the reading is. The AI explains what it means.</p>
+<p class="sub">Stage 6 — the finished application, ready to deploy.</p>
 
 <div class="row">
-  <div style="flex:1; min-width:240px">
+  <div style="flex:1; min-width:250px">
     <label for="preset">Scenario</label>
     <select id="preset" style="width:100%"></select>
   </div>
@@ -41,15 +39,11 @@
   <button id="send">Send</button>
 </div>
 
-<div class="result" id="result" hidden>
-  <div class="verdict" id="verdict"></div>
-  <div class="meta" id="rule"></div>
-  <div class="advice" id="advice"></div>
-</div>
+<div id="result">Press Send to check a reading.</div>
 
 <table>
   <thead>
-    <tr><th style="width:80px">Time</th><th>Reading</th>
+    <tr><th style="width:80px">Time</th><th style="width:170px">Reading</th>
         <th style="width:90px">Severity</th><th>Explanation</th></tr>
   </thead>
   <tbody id="history"></tbody>
@@ -84,44 +78,37 @@ $("send").addEventListener("click", async () => {
   const value = parseFloat($("value").value);
   if (Number.isNaN(value)) { alert("Reading must be a number."); return; }
 
-  $("send").disabled = true;
-  $("send").textContent = "Asking…";
-  try {
-    const res = await fetch("/readings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sensor: current.sensor, value,
-        unit: current.unit, low: current.low, high: current.high,
-      }),
-    });
-    if (!res.ok) throw new Error("Server returned " + res.status);
-    const data = await res.json();
+  // Send the reading to our own server and wait for its answer.
+  const res = await fetch("/readings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sensor: current.sensor, value,
+      unit: current.unit, low: current.low, high: current.high,
+    }),
+  });
 
-    $("result").hidden = false;
-    $("verdict").className = "verdict " + data.severity;
-    $("verdict").textContent = data.severity.toUpperCase();
-    $("rule").textContent =
-      `your code checked: ${current.low} ≤ ${value} ≤ ${current.high}`;
-    $("advice").innerHTML = `${data.reason}<br><em>${data.action}</em>`;
-    await loadHistory();
-  } catch (err) {
-    alert(err.message);
-  } finally {
-    $("send").disabled = false;
-    $("send").textContent = "Send";
-  }
+  if (!res.ok) { $("result").textContent = "Server error: " + res.status; return; }
+  const data = await res.json();
+
+  $("result").innerHTML =
+    `<div class="verdict ${data.severity}">${data.severity.toUpperCase()}</div>
+     <div class="rule">your code checked: ${current.low} &le; ${value} &le; ${current.high}</div>
+     <div class="advice">${data.reason}<br><em>${data.action}</em></div>`;
+
+  loadHistory();
 });
 
+// Fetch everything the server has stored and draw the table.
 async function loadHistory() {
   const rows = await (await fetch("/readings")).json();
-  $("history").innerHTML = rows.length
+  document.getElementById("history").innerHTML = rows.length
     ? rows.map(r => `<tr>
         <td>${(r.created || "").slice(11)}</td>
         <td>${r.sensor} ${r.value}${r.unit}</td>
         <td class="${r.severity}"><strong>${r.severity}</strong></td>
         <td>${r.reason || ""}</td></tr>`).join("")
-    : `<tr><td colspan="4" style="color:var(--muted)">No readings yet.</td></tr>`;
+    : `<tr><td colspan="4" style="color:#5f6672">Nothing stored yet.</td></tr>`;
 }
 loadHistory();
 </script>

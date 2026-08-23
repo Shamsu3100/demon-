@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sensor Triage</title>
+<style>
+  body { font:16px/1.6 system-ui, sans-serif; color:#1a1d26;
+         max-width:640px; margin:60px auto; padding:0 20px; }
+  h1 { font-size:28px; margin:0 0 6px; }
+  p.sub { color:#5f6672; margin:0 0 32px; }
+  #status { font-size:20px; font-weight:600; padding:20px;
+            border:1px solid #e2e5ea; border-radius:10px; }
+  .ok   { color:#0a7d28; }
+  .fail { color:#c0392b; }
+</style>
+
+<h1>Sensor Triage</h1>
+<p class="sub">Stage 2 — the page can now talk to your server.</p>
+
+<div id="status">checking…</div>
+
+<script>
+// Ask our own server whether it is alive.
+// This is a request; what comes back is a response.
+async function checkServer() {
+  const box = document.getElementById("status");
+  try {
+    const res  = await fetch("/health");
+    const data = await res.json();
+    box.className   = "ok";
+    box.textContent = "Connected to your server. It replied: " + data.status;
+  } catch (err) {
+    box.className   = "fail";
+    box.textContent = "Could not reach the server.";
+  }
+}
+checkServer();
+</script>

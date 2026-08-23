@@ -9,7 +9,7 @@ services:
     healthCheckPath: /health      # Render calls this to check the app is alive
     envVars:
       - key: USE_MOCK
-        value: "true"             # change to "false" once you add a key
+        value: "true"             # change to "false" once you have added a key
 
       # 'sync: false' means: this setting exists, but its value is typed
       # into the Render dashboard, never written in this file.

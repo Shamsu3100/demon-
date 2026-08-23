@@ -1,13 +1,9 @@
 import sqlite3
 from contextlib import contextmanager
 
-from dotenv import load_dotenv
-load_dotenv()          # read .env BEFORE anything else looks at the environment
-
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-
-import ai
 
 app = FastAPI()
 DB = "readings.db"
@@ -36,9 +32,7 @@ def init_db():
                 unit     TEXT,
                 low      REAL,
                 high     REAL,
-                severity TEXT,
-                reason   TEXT,
-                action   TEXT
+                severity TEXT
             )
         """)
 
@@ -47,6 +41,11 @@ init_db()
 
 
 class Reading(BaseModel):
+    """Describes what a valid reading looks like.
+
+    FastAPI checks every incoming request against this. If a field is
+    missing or the wrong type, the request is rejected before your code runs.
+    """
     sensor: str
     value: float
     unit: str
@@ -55,11 +54,14 @@ class Reading(BaseModel):
 
 
 def classify(value: float, low: float, high: float) -> str:
+    """Decide how serious a reading is. Plain arithmetic, no AI."""
     if low <= value <= high:
         return "normal"
-    margin = (high - low) / 2 or 1
+
+    margin = (high - low) / 2 or 1      # how far outside counts as "a lot"
     if value < low - margin or value > high + margin:
         return "critical"
+
     return "warning"
 
 
@@ -70,24 +72,24 @@ def health():
 
 @app.post("/readings")
 def create_reading(reading: Reading):
-    # 1. Our own code decides how serious it is. Instant and always correct.
     severity = classify(reading.value, reading.low, reading.high)
-
-    # 2. The AI turns that into a sentence a person can read.
-    advice = ai.explain(reading.sensor, reading.value, reading.unit,
-                        reading.low, reading.high, severity)
 
     with db() as conn:
         cursor = conn.execute(
-            "INSERT INTO readings (sensor, value, unit, low, high,"
-            " severity, reason, action) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (reading.sensor, reading.value, reading.unit, reading.low,
-             reading.high, severity, advice.reason, advice.action),
+            "INSERT INTO readings (sensor, value, unit, low, high, severity)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (reading.sensor, reading.value, reading.unit,
+             reading.low, reading.high, severity),
         )
         new_id = cursor.lastrowid
 
-    return {"id": new_id, "sensor": reading.sensor, "value": reading.value,
-            "severity": severity, "reason": advice.reason, "action": advice.action}
+    return {
+        "id": new_id,
+        "sensor": reading.sensor,
+        "value": reading.value,
+        "unit": reading.unit,
+        "severity": severity,
+    }
 
 
 @app.get("/readings")
@@ -97,3 +99,8 @@ def list_readings(limit: int = 20):
             "SELECT * FROM readings ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+# Serve the web page from the "static" folder.
+# This line must always be LAST, after every endpoint above it.
+app.mount("/", StaticFiles(directory="static", html=True), name="static")

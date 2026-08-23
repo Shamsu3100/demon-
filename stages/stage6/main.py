@@ -48,6 +48,11 @@ init_db()
 
 
 class Reading(BaseModel):
+    """Describes what a valid reading looks like.
+
+    FastAPI checks every incoming request against this. If a field is
+    missing or the wrong type, the request is rejected before your code runs.
+    """
     sensor: str
     value: float
     unit: str
@@ -56,11 +61,14 @@ class Reading(BaseModel):
 
 
 def classify(value: float, low: float, high: float) -> str:
+    """Decide how serious a reading is. Plain arithmetic, no AI."""
     if low <= value <= high:
         return "normal"
-    margin = (high - low) / 2 or 1
+
+    margin = (high - low) / 2 or 1      # how far outside counts as "a lot"
     if value < low - margin or value > high + margin:
         return "critical"
+
     return "warning"
 
 
@@ -71,7 +79,7 @@ def health():
 
 @app.post("/readings")
 def create_reading(reading: Reading):
-    # 1. Our own code decides how serious it is. Instant and always correct.
+    # 1. Our own code decides how serious it is. Instant, always correct.
     severity = classify(reading.value, reading.low, reading.high)
 
     # 2. The AI turns that into a sentence a person can read.
@@ -87,8 +95,15 @@ def create_reading(reading: Reading):
         )
         new_id = cursor.lastrowid
 
-    return {"id": new_id, "sensor": reading.sensor, "value": reading.value,
-            "severity": severity, "reason": advice.reason, "action": advice.action}
+    return {
+        "id": new_id,
+        "sensor": reading.sensor,
+        "value": reading.value,
+        "unit": reading.unit,
+        "severity": severity,
+        "reason": advice.reason,
+        "action": advice.action,
+    }
 
 
 @app.get("/readings")
@@ -100,6 +115,6 @@ def list_readings(limit: int = 20):
     return [dict(row) for row in rows]
 
 
-# Serve the web page. This line must come LAST, after every endpoint above,
-# because it claims every remaining address.
+# Serve the web page from the "static" folder.
+# This line must always be LAST, after every endpoint above it.
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
