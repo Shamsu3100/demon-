@@ -18,6 +18,49 @@ toc-depth: 2
 numbersections: false
 ---
 
+# Why this workshop exists
+
+Nine of the ten workshops in this series teach you to build something: a model,
+a sensor rig, an algorithm, a circuit board.
+
+**This is the one where somebody else gets to see it.**
+
+```
+   Your engineering idea            The other nine workshops
+   --------------------            ------------------------
+                                    a model . a sensor rig
+                                    an algorithm . a PCB
+              |                                |
+              +----------------+---------------+
+                               |
+                               v
+                 +-------------------------+
+                 |  IT ALL LIVES ON ONE    |
+                 |  LAPTOP                 |
+                 +-------------------------+
+                               |
+                               v
+                 +-------------------------+
+                 |     THIS WORKSHOP       |
+                 |   full-stack app        |
+                 |   AI integration        |
+                 |   cloud deployment      |
+                 +-------------------------+
+                               |
+                               v
+                     a link you can send
+```
+
+A trained model is invisible to anyone not sitting at the laptop that trained
+it. A sensor reading in a terminal cannot be shown to a judge, a supervisor, or
+a collaborator in another city.
+
+This workshop is the bridge across that gap. It is not about AI, and it is not
+about hardware. It is about the step that turns either one into something with
+an address.
+
+---
+
 # How to use this guide
 
 This guide takes you from a computer with nothing installed to a working web

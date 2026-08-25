@@ -451,7 +451,143 @@ database, and it is a small change.
 
 ---
 
-## 1.10 What we are building
+## 1.10 The wider landscape
+
+Everything in this workshop is one choice out of several at each layer. None of
+those choices is the only correct one, and knowing the alternatives is what lets
+you make your own decision on the next project.
+
+For each layer: what exists, and why we picked what we picked.
+
+### The backend framework
+
+What runs your server code.
+
+| | Language | Notes |
+|---|---|---|
+| **FastAPI** | Python | what we use. Automatic validation and an automatic test page |
+| Flask | Python | older and simpler. No automatic validation or docs |
+| Django | Python | batteries included: admin panel, user accounts, database layer. Heavier |
+| Express | JavaScript | the default in the Node world |
+| Spring Boot | Java | the enterprise standard |
+| Gin, net/http | Go | compiled and very fast |
+| Rails, Laravel | Ruby, PHP | mature and highly opinionated |
+
+**Why FastAPI:** you already write Python for AI and engineering work, so there
+is no second language to learn. The automatic validation and the free `/docs`
+page do real work for you, and neither Flask nor Express gives you those without
+extra libraries.
+
+### The frontend
+
+What draws the page.
+
+| | Notes |
+|---|---|
+| **Plain HTML and JavaScript** | what we use. No build step, nothing to install, works everywhere |
+| React, Vue, Svelte | component frameworks for large interfaces. Require a build step |
+| Streamlit, Gradio | Python only, no HTML at all. Extremely fast for a dashboard |
+| Flutter, React Native | mobile applications |
+| Native iOS / Android | full platform access |
+
+**Why plain HTML:** the subject of this workshop is deployment, not interface
+design. A build step is one more thing that can break in front of an audience,
+and React would teach you React rather than teach you deployment.
+
+> **The important point is underneath this table.** Every option above talks to
+> the same backend, in the same way. Your `/readings` endpoint does not know or
+> care whether the request came from plain JavaScript, a React application, a
+> Flutter phone app, or a microcontroller.
+>
+> **Build the backend once, and every kind of client can use it.** That is why
+> the split between frontend and backend exists at all.
+
+### Streamlit and Gradio, specifically
+
+Worth calling out, because for some projects they are genuinely the better
+choice.
+
+Both let you build a web interface in pure Python, with no HTML. A dashboard
+that would take you an hour here takes about fifteen lines there.
+
+**But neither one can receive a POST from a device.** They have no route
+handlers. If your project has a microcontroller sending readings, you need a
+real backend. If it is software only and you just need a face on it, Streamlit
+will save you hours.
+
+### The database
+
+| | Type | Notes |
+|---|---|---|
+| **SQLite** | relational | what we use. A whole database in one file |
+| PostgreSQL | relational | the general-purpose default for real applications |
+| MySQL / MariaDB | relational | similar, extremely widely deployed |
+| MongoDB | document | stores JSON-shaped records; flexible shape |
+| Redis | key-value | in-memory and very fast; used for caching and queues |
+
+Three broad categories, and the difference matters more than the brand:
+
+- **Relational** — data in tables with fixed columns, queried with SQL. Right
+  when your data has a consistent shape, which most sensor data does.
+- **Document** — records that are JSON objects and need not all match. Right
+  when the shape varies or changes often.
+- **Key-value** — a very fast lookup by name. Usually a cache in front of
+  something else, not your main storage.
+
+**Why SQLite:** no installation, no configuration, no account. When it stops
+being enough, PostgreSQL is the usual next step, and the SQL you learned still
+applies.
+
+### The AI provider
+
+| | Notes |
+|---|---|
+| **Anthropic (Claude)** | what we use |
+| OpenAI | similar shape and pricing model |
+| Google (Gemini) | similar; a free tier is often available |
+| Mistral, Cohere | smaller providers, competitive pricing |
+| Ollama, vLLM | run open models on your own machine or server |
+| Hugging Face | thousands of open models, hosted or downloaded |
+| AWS Bedrock, Azure AI, Vertex AI | the same models, billed through a cloud provider |
+
+**They nearly all follow the same shape:** send text plus a key, get text back.
+The library differs, the endpoint differs, the parameter names differ slightly.
+The idea does not.
+
+That is exactly why our AI call lives alone in `ai.py`. Changing provider means
+editing one file, and nothing else in the application notices.
+
+### Automation, once your project is real
+
+Not needed today, but you will meet these:
+
+| | What it does |
+|---|---|
+| **Docker** | packages your code with everything it needs, so it runs identically anywhere |
+| **GitHub Actions** | runs tasks automatically on every push: tests, checks, deployment |
+| **pytest** | writes tests that check your code still works after a change |
+| **Sentry, uptime monitors** | tell you your application broke before your users do |
+
+### How to choose, on your next project
+
+Four questions, in this order:
+
+1. **Does anything need to send data to it?** If yes, you need a real backend.
+   That rules out static hosting, Streamlit and Gradio.
+2. **Do you have a secret to protect?** If yes, you need a backend. Same
+   conclusion.
+3. **What language do you already write?** Use it. Learning a framework is
+   quick; learning a language while learning deployment is not.
+4. **How long does it need to live?** A demonstration, a term project, and a
+   product have very different answers, and it is fine to choose the cheap
+   option for the first two.
+
+**Almost every "which technology should I use" question is answered by one of
+those four.**
+
+---
+
+## 1.11 What we are building
 
 A **sensor triage service**.
 
@@ -500,6 +636,8 @@ worth re-reading before Part 2.
 4. Why does the server need `requirements.txt` when your laptop does not?
 5. Why must the API key live on the backend rather than in the page?
 6. What happens to your SQLite file when you redeploy on free hosting?
+7. Why can Streamlit not receive a reading from an ESP32?
+8. Name one reason you would choose PostgreSQL over SQLite.
 
 ---
 
