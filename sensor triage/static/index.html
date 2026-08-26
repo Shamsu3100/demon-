@@ -1,0 +1,84 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sensor Triage</title>
+<style>
+  body { font:16px/1.6 system-ui, sans-serif; color:#1a1d26;
+         max-width:720px; margin:50px auto; padding:0 20px; }
+  h1 { font-size:28px; margin:0 0 6px; }
+  p.sub { color:#5f6672; margin:0 0 28px; }
+  label { display:block; font-size:11px; letter-spacing:.5px;
+          text-transform:uppercase; color:#5f6672; margin-bottom:4px; }
+  select, input, button { font:inherit; padding:9px 11px;
+          border:1px solid #e2e5ea; border-radius:6px; background:#fff; }
+  button { background:#1a1d26; color:#fff; border:none; cursor:pointer; font-weight:600; }
+  .row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:24px; }
+  #result { border:1px solid #e2e5ea; border-radius:10px; padding:22px; }
+  .verdict { font-size:30px; font-weight:700; letter-spacing:.5px; }
+  .rule { font-size:13px; color:#5f6672; margin-top:4px; }
+  .normal { color:#0a7d28; } .warning { color:#a85f00; } .critical { color:#c0392b; }
+</style>
+
+<h1>Sensor Triage</h1>
+<p class="sub">Stage 3 — your code now decides how serious a reading is.</p>
+
+<div class="row">
+  <div style="flex:1; min-width:250px">
+    <label for="preset">Scenario</label>
+    <select id="preset" style="width:100%"></select>
+  </div>
+  <div style="width:110px">
+    <label for="value">Reading</label>
+    <input id="value" type="number" step="any" style="width:100%">
+  </div>
+  <button id="send">Send</button>
+</div>
+
+<div id="result">Press Send to check a reading.</div>
+
+<script>
+const PRESETS = [
+  { name:"Body temperature",  sensor:"body_temp",     unit:"C",   low:36.1, high:37.2, demo:39.4 },
+  { name:"Heart rate",        sensor:"heart_rate",    unit:"bpm", low:60,   high:100,  demo:142  },
+  { name:"Blood oxygen",      sensor:"spo2",          unit:"%",   low:95,   high:100,  demo:88   },
+  { name:"Indoor CO2",        sensor:"co2",           unit:"ppm", low:400,  high:1000, demo:1450 },
+  { name:"Power draw",        sensor:"power_draw",    unit:"W",   low:0,    high:3500, demo:4800 },
+  { name:"Soil moisture",     sensor:"soil_moisture", unit:"%",   low:30,   high:70,   demo:8    },
+  { name:"Motor temperature", sensor:"motor_temp",    unit:"C",   low:20,   high:60,   demo:87   },
+];
+
+const $ = id => document.getElementById(id);
+let current = PRESETS[0];
+
+$("preset").innerHTML = PRESETS
+  .map((p, i) => `<option value="${i}">${p.name} — safe ${p.low}–${p.high} ${p.unit}</option>`)
+  .join("");
+
+function applyPreset() {
+  current = PRESETS[$("preset").value];
+  $("value").value = current.demo;
+}
+$("preset").addEventListener("change", applyPreset);
+applyPreset();
+
+$("send").addEventListener("click", async () => {
+  const value = parseFloat($("value").value);
+  if (Number.isNaN(value)) { alert("Reading must be a number."); return; }
+
+  // Send the reading to our own server and wait for its answer.
+  const res = await fetch("/readings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sensor: current.sensor, value,
+      unit: current.unit, low: current.low, high: current.high,
+    }),
+  });
+
+  if (!res.ok) { $("result").textContent = "Server error: " + res.status; return; }
+  const data = await res.json();
+
+  $("result").innerHTML =
+    `<div class="verdict ${data.severity}">${data.severity.toUpperCase()}</div>
+     <div class="rule">your code checked: ${current.low} &le; ${value} &le; ${current.high}</div>`;
+});
+</script>

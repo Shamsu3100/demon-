@@ -288,7 +288,7 @@ You will see the word "repository" (usually shortened to **repo**) everywhere.
 A repository is just **one project's folder, stored on GitHub, with all of its
 history**. One project, one repo.
 
-We create ours in Part 3. Nothing to do now.
+We create ours in Part 4. Nothing to do now.
 
 ---
 
@@ -324,13 +324,13 @@ see the repositories you tell it to.
 
 5. Choose the **free** plan when offered. No card is required
 
-Nothing else to do here. We come back to it in Part 3.
+Nothing else to do here. We come back to it in Part 4.
 
 ---
 
 ## 0.8 One thing that will trip you up on Windows
 
-Not now — in Part 2, when you activate a virtual environment. It is included
+Not now — in Part 3, when you activate a virtual environment. It is included
 here so you recognise it when it happens.
 
 You will run this:

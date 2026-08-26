@@ -20,7 +20,18 @@ line of code, and a troubleshooting table.
 You do **not** need an AI account, an API key, or a credit card. The application
 runs fully with `USE_MOCK=true`.
 
-## The six stages
+## Two paths
+
+**Fast path** — `fastpath/` — a trained model online in about 20 minutes, with no
+HTML and no server code. Notebook, model, Gradio app, deployed to Hugging Face
+Spaces.
+
+**Full path** — `stages/` — a complete application a device can send readings
+to, deployed to Render.
+
+Part 2 of the guide ends with a table showing which one your project needs.
+
+## The full path, stage by stage
 
 | | | |
 |---|---|---|

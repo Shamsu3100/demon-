@@ -1,8 +1,8 @@
-"""Build the workshop PDF from the five part files.
+"""Build the workshop PDF from the six part files.
 
     python build_pdf.py
 
-Combines _front.md + PART0..4 + _back.md into BOOK.md, substitutes glyphs
+Combines _front.md + PART0..5 + _back.md into BOOK.md, substitutes glyphs
 XeLaTeX cannot find, then runs pandoc.
 """
 import pathlib
@@ -12,7 +12,7 @@ import sys
 
 HERE = pathlib.Path(__file__).parent
 PARTS = ["_front.md", "PART0.md", "PART1.md", "PART2.md",
-         "PART3.md", "PART4.md", "_back.md"]
+         "PART3.md", "PART4.md", "PART5.md", "_back.md"]
 OUT = "Full-Stack_Deployment_Guide.pdf"
 
 # Glyphs Cambria / Consolas do not carry -> safe equivalents

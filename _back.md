@@ -234,7 +234,7 @@ IEEE Multimedia University Student Branch, with co-organisers E3S2 UTP,
 IEEE PES MMU SBC, EWB MMU, and IEM MMU.
 
 Every command and every line of code in this guide was executed and verified
-before publication. The measured figures quoted in Part 2 and Part 4 — model
+before publication. The measured figures quoted in Part 3 and Part 5 — model
 accuracy, response times, concurrency behaviour — were produced by running the
 tests described, not taken from other sources.
 

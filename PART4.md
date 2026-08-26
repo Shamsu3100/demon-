@@ -1,343 +1,483 @@
-# Part 4 — Where to go next
+# Part 4 — Put it on the internet
 
-Your application is finished and deployed. This part is what to add when you
-need it.
+Your application works. It works on exactly one computer, and only while that
+computer is awake with a terminal open.
 
-Each section is a pointer with enough code to start, not a full tutorial. Take
-the ones your project actually needs and ignore the rest.
-
----
-
-## 4.1 Connect a real device
-
-This is the one most of you need, and it requires **no change to your server at
-all.**
-
-Your `/readings` endpoint accepts JSON. It does not know or care whether that
-JSON came from a browser, a phone, a Python script, or a microcontroller.
-
-### From an ESP32 or Arduino
-
-```cpp
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include <WiFiClientSecure.h>
-
-const char* WIFI_SSID = "your-wifi-name";
-const char* WIFI_PASS = "your-wifi-password";
-const char* ENDPOINT  = "https://sensor-triage-xxxx.onrender.com/readings";
-
-void setup() {
-  Serial.begin(115200);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
-  Serial.println(" connected");
-}
-
-void loop() {
-  float reading = analogRead(34) * 0.1;      // <-- your sensor here
-
-  WiFiClientSecure client;
-  client.setInsecure();        // skip certificate checking (fine for a prototype)
-
-  HTTPClient http;
-  http.begin(client, ENDPOINT);
-  http.addHeader("Content-Type", "application/json");
-
-  String body = String("{\"sensor\":\"motor_temp\",\"value\":") + reading +
-                ",\"unit\":\"C\",\"low\":20,\"high\":60}";
-
-  int status = http.POST(body);
-  Serial.printf("sent %.1f -> HTTP %d\n", reading, status);
-  http.end();
-
-  delay(60000);                              // once a minute
-}
-```
-
-That is the whole integration. Your sensor readings now appear on a web page
-anyone in the world can open.
-
-### From a Python script or a Raspberry Pi
-
-```python
-import requests
-
-requests.post(
-    "https://sensor-triage-xxxx.onrender.com/readings",
-    json={"sensor": "motor_temp", "value": 87,
-          "unit": "C", "low": 20, "high": 60},
-    timeout=10,
-)
-```
-
-### Three practical notes
-
-**`client.setInsecure()`** skips checking the server's HTTPS certificate. Fine
-for a prototype on your own service; not what you would ship in a product.
-
-**Watch the free tier's sleep.** If your device posts once an hour, the service
-will be asleep every time and each post waits for a wake-up. Posting every few
-minutes keeps it awake — which is itself a reason to consider a paid plan later.
-
-**Send the range from the device or hardcode it in the server.** Right now the
-device sends `low` and `high` every time. For a real deployment you would more
-likely store safe ranges per sensor in the database, so the device only sends a
-reading.
+This part moves it to a machine that never sleeps, at an address anyone can
+open.
 
 ---
 
-## 4.2 Where the other workshops plug in
+## 4.1 What "deploying" actually means
 
-Look at the ten sessions in this series. Every other one produces something that
-lives **on a laptop or on a device**: a trained model, code on a microcontroller,
-readings in a terminal, a PCB.
+Three things have to happen.
 
-**Yours is the only one that ends with something anyone can open.** That makes
-this application the natural place for the others to become visible.
-
-| Workshop | What it gives you | Where it plugs in |
-|---|---|---|
-| **Predictive Analytics & AI Modelling** | a trained model | replace `classify()` with your model's prediction, or add an endpoint that runs it |
-| **TinyML — Edge AI on Small Devices** | a model running on a chip | the device POSTs its prediction to `/readings` as the `value` |
-| **Edge AI & Sensor Monitoring** | live sensor readings | exactly section 4.1 — no server changes |
-| **Designing IoT Systems for Energy Saving** | power telemetry | same endpoint; the "reading" is watts |
-| **Software Algorithms & Control** | control logic on a device | POST the state, display it, and read decisions back |
-| **Engineering AI Prompting** | better prompts | the `SYSTEM` and `prompt` strings in `ai.py` |
-
-### Replacing `classify()` with a trained model
-
-If Workshop 3 gave you a model, the change is small:
-
-```python
-import joblib
-
-model = joblib.load("model.pkl")
-
-
-def classify(value: float, low: float, high: float) -> str:
-    prediction = model.predict([[value, low, high]])[0]
-    return prediction        # "normal" | "warning" | "critical"
-```
-
-Everything else — the endpoint, the database, the page, the deployment — is
-unchanged. **That is what a clean boundary buys you.**
-
-> One caution: add `scikit-learn` (or whatever you trained with) to
-> `requirements.txt`, and commit the model file. Model files can be large;
-> anything over about 100 MB will not fit in a normal git repository.
-
----
-
-## 4.3 Keep your data when you redeploy
-
-Free hosting wipes the disk on every deploy, so `readings.db` disappears.
-
-**Fix:** use a managed database instead of a file.
-
-1. In Render: **New → PostgreSQL**, choose the free plan
-2. Copy the **Internal Database URL** it gives you
-3. Add it as an environment variable, `DATABASE_URL`
-4. Install `psycopg[binary]` and change how you connect
-
-The concepts you learned do not change — a table, an `INSERT`, a `SELECT`. Only
-the connection does.
-
-> Render's free PostgreSQL expires after a period and then needs recreating.
-> Check the current terms before relying on it for anything that matters.
-
----
-
-## 4.4 Make it feel fast
-
-Your `/readings` endpoint waits for the AI before replying. With a fast model
-that is fine. With a slow one it is not — measured on the same question, five
-times in a row: **4.7s, 4.9s, 7.5s, 17.1s, 26.4s.**
-
-The problem is not that it is slow. It is that you **cannot predict** how slow,
-so you cannot promise the user anything.
-
-### The fix: answer first, explain afterwards
-
-1. Compute the severity and save the row with `ai_status = "pending"`
-2. **Return immediately** — the visitor has their answer in milliseconds
-3. Do the AI call in a background task, and update the row when it finishes
-4. The page polls until the explanation appears
-
-FastAPI has this built in:
-
-```python
-from fastapi import BackgroundTasks
-
-
-def fill_in_explanation(reading_id: int, ...):
-    """Runs AFTER the response has already been sent."""
-    advice = ai.explain(...)
-    with db() as conn:
-        conn.execute(
-            "UPDATE readings SET reason=?, action=?, ai_status='done' WHERE id=?",
-            (advice.reason, advice.action, reading_id),
-        )
-
-
-@app.post("/readings")
-def create_reading(reading: Reading, background: BackgroundTasks):
-    severity = classify(reading.value, reading.low, reading.high)
-    # ... insert with ai_status='pending', get new_id ...
-
-    background.add_task(fill_in_explanation, new_id, ...)   # queued, not awaited
-
-    return {"id": new_id, "severity": severity, "ai_status": "pending"}
-```
-
-Measured on this application: the endpoint returned in **~30 ms** instead of
-waiting 9 to 50 seconds. The slow part is still slow; it just stopped being the
-visitor's problem.
-
-> You have seen this pattern before. A messaging app shows your message
-> instantly with one tick, then updates the delivery status a moment later. It
-> did not wait for the network before showing you your own message.
->
-> This applies far beyond AI. Any slow third party — payments, email, image
-> processing — belongs behind this same structure.
-
----
-
-## 4.5 Run the AI free, on your own machine
-
-You can run a small language model locally with **[Ollama](https://ollama.com)**.
-No account, no key, no cost, and it works with no internet connection.
-
-```
-ollama pull llama3.2:3b
-```
-
-Then add a branch to `explain()` in `ai.py` that posts to
-`http://localhost:11434/api/chat`.
-
-### The trap that will cost you a day
-
-**`localhost` means "the computer running this code".**
-
-On your laptop, that is your laptop, and Ollama is there. On your deployed
-server, that is the server — and Ollama is not there. Your AI silently stops
-working and the application keeps running as though nothing is wrong.
-
-You cannot fix it by installing Ollama on the server either. A small model needs
-around **4 GB** of memory; free hosting gives you about **512 MB**. It is not a
-configuration problem you can solve; it does not fit.
-
-### So decide your target before you build
-
-| Your project runs... | Use |
+| | |
 |---|---|
-| on a laptop at a table, possibly with no wifi | a local model — free, private, offline |
-| at a public address people open remotely | a hosted API — needs a key, costs cents |
+| **1. Your code has to get there** | you cannot email a folder to a server. This is what GitHub is for |
+| **2. The server has to know how to run it** | it starts empty: no Python packages, no start command |
+| **3. It has to keep running** | if it crashes at 3am, something must restart it |
 
-Both are valid. Choosing late is what costs you.
+We solve them in that order: two small files, then GitHub, then Render.
 
----
-
-## 4.6 Control what you spend
-
-Two limits, and you want both.
-
-**1. On your provider account.** Set a hard monthly cap in their console before
-you write any code. This is the one that actually protects you.
-
-**2. In your application.** Refuse to send the request once you have spent
-enough today:
-
-```python
-def check_budget():
-    """Call BEFORE spending money. Raise rather than charge."""
-    spent = todays_spend()          # you store this
-    if spent >= MAX_USD_PER_DAY:
-        raise RuntimeError(f"Daily cap reached (${spent:.4f})")
-```
-
-Then record the real cost afterwards, using the token counts the API reports
-back rather than an estimate:
-
-```python
-usage = response.usage
-cost = (usage.input_tokens / 1e6) * PRICE_IN \
-     + (usage.output_tokens / 1e6) * PRICE_OUT
-```
-
-Normal use costs almost nothing. What costs money is a bug that retries forever
-overnight, or a key someone else is using. The cap catches both.
+Nothing about your application changes. `main.py`, `ai.py` and `index.html` are
+finished. Everything in this part is **around** your code, not inside it.
 
 ---
 
-## 4.7 Know when the AI has failed
+## 4.2 The two files a server needs
 
-A subtle one, and worth understanding.
+### `requirements.txt` — what to install
 
-Suppose you make `explain()` fall back to a plain sentence when the AI is
-unreachable. That is good design — the application keeps working.
+Your laptop has FastAPI because you installed it. The server starts completely
+empty. This file is the shopping list.
 
-But it creates a new problem: **the failure becomes invisible.** The app looks
-fine, the output looks plausible, and the AI has not run for three days.
-
-Two rules:
-
-**Log every fallback, with the reason.**
-
-```python
-except Exception as e:
-    logging.warning("AI unavailable (%s), using fallback: %s", type(e).__name__, e)
-    return fallback
+```
+fastapi==0.141.1
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+python-dotenv==1.0.1
+anthropic==1.0.0
 ```
 
-**Never let the interface claim a model wrote something a model did not write.**
-Store where the text came from — the model name, or `"rule"`, or
-`"fallback:ConnectionError"` — and show it.
+To see your own exact versions:
 
-> This happened while building this workshop. The dashboard said "from the AI
-> model" above text an `if` statement had written. It was only noticed because
-> someone asked what the label meant.
+```
+pip freeze
+```
+
+> ### Pin the versions
 >
-> **Degrade gracefully, but log loudly.** Any fallback path in any system needs
-> to be visible, or you will not find the bug.
+> Writing `fastapi` with no `==` version means the server installs whatever is
+> newest **on the day it builds**. Your application then breaks weeks later
+> without you touching a single line of code.
+>
+> This is not hypothetical. While preparing this workshop, installing an
+> unrelated package upgraded a library underneath FastAPI and broke the
+> application. `requirements.txt` had pinned FastAPI, but not the library
+> beneath it.
+>
+> Pin everything. `pip freeze` gives you the exact list.
 
----
+### `render.yaml` — how to run it
 
-## 4.8 Where to learn more
+```yaml
+# Render reads this file and sets the whole service up for you.
+services:
+  - name: sensor-triage
+    type: web
+    runtime: python
+    plan: free                    # no credit card required
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health      # Render calls this to check the app is alive
+    envVars:
+      - key: USE_MOCK
+        value: "true"             # change to "false" once you have added a key
 
-| Topic | Where |
+      # 'sync: false' means: this setting exists, but its value is typed
+      # into the Render dashboard, never written in this file.
+      # This file is uploaded to GitHub. A key must never be in it.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+```
+
+Line by line:
+
+| | |
 |---|---|
-| FastAPI | **fastapi.tiangolo.com** — genuinely excellent, start with the tutorial |
-| Git | **git-scm.com/book** — free, thorough |
-| HTTP and the web | **developer.mozilla.org** (MDN) — the reference everyone uses |
-| Render | **render.com/docs** |
-| Databases | the PostgreSQL tutorial, once SQLite stops being enough |
+| `type: web` | this service receives web requests |
+| `runtime: python` | it is a Python project |
+| `plan: free` | the free tier |
+| `buildCommand` | runs **once**, when the code arrives |
+| `startCommand` | runs to keep the application alive |
+| `healthCheckPath` | the address Render calls to check you are alive |
 
-### The three things to learn next
+**`/health` was worth writing in Stage 1 after all.** Render will call it every
+few seconds, and restart your service if it stops answering.
 
-1. **Authentication** — how to require a login. Right now anyone can post to
-   your endpoint. FastAPI's security documentation covers this.
-2. **Testing** — writing code that checks your code. `pytest` plus FastAPI's
-   `TestClient`. Your `classify()` function is an ideal first test.
-3. **Managed databases** — section 4.3, when data needs to survive.
+### Three details worth understanding
+
+**`--host 0.0.0.0`**
+
+On your laptop, uvicorn listens only for requests from your own machine. On a
+server that would make it unreachable. `0.0.0.0` means *accept requests from
+anywhere*.
+
+**`--port $PORT`**
+
+The hosting platform chooses the port and tells your application through an
+environment variable.
+
+Hardcode `8000` here and you get a confusing failure: the logs look healthy, the
+service says it started, and the address shows nothing — because the platform is
+sending traffic to a door your app is not standing behind.
+
+**`sync: false`**
+
+This is the important one.
+
+`render.yaml` gets **uploaded to GitHub**. A key written as a `value:` here is
+published exactly as if you had pasted it into your source code.
+
+`sync: false` says: *this setting exists, but its value is not in this file.* You
+type the value into Render's dashboard afterwards, where it is private.
+
+> **Any file that gets committed is a place a secret can hide.** `.env` is not
+> the only one. Configuration files, CI workflow files, notebooks, Docker files.
+> Build the habit of asking *"is this file uploaded?"* before typing a secret
+> anywhere.
 
 ---
 
-## What you actually learned
+## 4.3 Git, in five minutes
 
-The application is a vehicle. What transfers is underneath it:
+You installed git in Part 0. Here is what it actually does.
 
-- **A backend receives requests and decides what to send back.** Every web
-  service works this way.
-- **The frontend is public and the backend is not.** That single fact decides
-  where secrets live.
-- **Validate input at the edge**, because anyone can send anything.
-- **Know what each component is good at.** Arithmetic to code, language to a
-  language model.
-- **Anything slow or external is allowed to fail** — but make the failure
-  visible.
-- **Pin your dependencies**, or your build breaks on a day you did not touch it.
-- **Config belongs outside your code**, so the same program runs anywhere.
+### The four words you need
 
-None of that is FastAPI, Render, or this application. It is how software gets
-built, and the next thing you build will have the same shape.
+> **Repository** (**repo**) — one project's folder, with all of its history.
+> Your `sensor-triage` folder becomes one.
+
+> **Commit** — a saved checkpoint. It records exactly what every file looked
+> like at that moment, with a message saying what changed.
+
+> **Remote** — a copy of your repository somewhere else. Ours will live on
+> GitHub.
+
+> **Push** — send your commits to the remote.
+
+### The mental model
+
+```
+   your folder  ──commit──▶  local history  ──push──▶  GitHub
+```
+
+Git records checkpoints on **your machine** first. Pushing copies them
+somewhere else. That is why git works perfectly well offline, and why GitHub is
+optional right up until you need another computer to see your code.
+
+### Why we need it here
+
+Render does not want a zip file. It connects to GitHub, reads your repository,
+and rebuilds your application from it. Every time you push, it can redeploy
+automatically.
+
+---
+
+## 4.4 Put your code on GitHub
+
+### Create the repository on GitHub
+
+1. Go to **<https://github.com/new>**
+2. **Repository name** — `sensor-triage` is fine
+3. Choose **Public** or **Private** — either works with Render
+4. **Do not tick** "Add a README file", ".gitignore", or "Choose a licence"
+
+> Those three tick-boxes create files on GitHub, which conflicts with the files
+> you already have locally, and produces a confusing error on your first push.
+> Start empty.
+
+5. Click **Create repository**
+
+GitHub now shows a page of setup commands. We use them below.
+
+### Turn your folder into a repository
+
+Back in your terminal, in your `sensor-triage` folder:
+
+```
+git init
+```
+
+```
+git add .
+```
+
+`git add .` stages everything in the folder — except whatever `.gitignore`
+excludes.
+
+### Check what you are about to upload
+
+**This is the most important command in the whole workshop.**
+
+```
+git status
+```
+
+Read the list carefully. You should see `main.py`, `ai.py`, `static/`,
+`requirements.txt`, `render.yaml`, `.gitignore`.
+
+> ### `.env` must NOT be in that list
+>
+> Nor should `readings.db`, `.venv`, or `__pycache__`.
+>
+> If `.env` appears, **stop**. Your `.gitignore` is missing or misspelled. Fix
+> it, run `git add .` again, and check again.
+>
+> Three seconds here prevents the problem in the next section, which has no
+> clean fix.
+
+### Make your first commit
+
+```
+git commit -m "Sensor triage service"
+```
+
+The `-m` is the message. Write what changed, for the version of you that reads
+it in three months.
+
+### Connect it to GitHub and push
+
+Replace the URL with your own — GitHub showed it on the page after you created
+the repository:
+
+```
+git remote add origin https://github.com/YOUR-USERNAME/sensor-triage.git
+```
+
+```
+git branch -M main
+```
+
+```
+git push -u origin main
+```
+
+The first time, a window may open asking you to sign in to GitHub. Do so; your
+computer remembers it afterwards.
+
+Refresh your repository page. **Your code is on the internet** — though not yet
+running anywhere.
+
+---
+
+## 4.5 Why "I deleted it" does not work
+
+Run this demonstration, or at least read it carefully. It is the single most
+expensive mistake in this workshop.
+
+**What happens:**
+
+1. You accidentally commit a file with your API key in it, and push
+2. You notice, delete the key, commit again, and push
+3. The file on GitHub now looks completely clean
+
+**And yet anyone who clones your repository can run:**
+
+```
+git show <earlier-commit>:main.py
+```
+
+```python
+client = anthropic.Anthropic(api_key="sk-ant-api03-REDACTED")
+```
+
+**The key is still there.**
+
+Git's whole purpose is remembering every version. Deleting a line creates a
+*new* commit; it does not remove the old one. The old version is still in the
+history, and the history is what gets uploaded.
+
+Rewriting history does not save you either. By the time you notice, the
+repository has been cloned, cached, and scanned.
+
+> ### The only real fix
+>
+> If a key has been pushed — even for one minute, even to a private repository —
+> **treat it as stolen.**
+>
+> Go to the provider's website, delete that key, and create a new one. It takes
+> thirty seconds and it is the only action that actually works.
+
+Providers also scan public repositories automatically and disable keys they
+find, often within minutes. Your application then dies with a `401` error at the
+worst possible time.
+
+**This is why `git status` before your first push is worth the three seconds.**
+
+---
+
+## 4.6 Deploy on Render
+
+You created the account in Part 0. Now we use it.
+
+### The steps
+
+1. Go to **<https://dashboard.render.com>**
+
+2. Click **New** (top right) → **Blueprint**
+
+   > **Blueprint** is Render's word for "read the `render.yaml` file and set
+   > everything up from it". The alternative is filling in a form by hand;
+   > the file is better, because it is version-controlled and repeatable.
+
+3. If asked, **connect your GitHub account** and give Render access — either to
+   all repositories, or just to `sensor-triage`
+
+4. Select **`sensor-triage`** from the list
+
+5. Render reads your `render.yaml` and shows what it is about to create. It
+   should show one web service on the free plan
+
+6. Click **Apply** (or **Create**)
+
+### Now wait
+
+The first build takes **two to four minutes**. You will see a log scrolling past:
+
+```
+==> Cloning from https://github.com/...
+==> Running build command 'pip install -r requirements.txt'
+    Collecting fastapi==0.141.1
+    ...
+==> Build successful
+==> Running 'uvicorn main:app --host 0.0.0.0 --port $PORT'
+INFO:     Uvicorn running on http://0.0.0.0:10000
+==> Your service is live
+```
+
+> **Errors and a blank page during this time are normal, not failure.** The
+> service does not exist until the build finishes. Read the log rather than
+> refreshing the address.
+
+### See the result
+
+At the top of the page is your address:
+
+```
+https://sensor-triage-xxxx.onrender.com
+```
+
+Open it. **Open it on your phone.** Send it to someone in another country.
+
+Your application is on the internet.
+
+### Check the pieces
+
+| Address | Should show |
+|---|---|
+| `/` | the page you built |
+| `/health` | `{"status":"ok"}` |
+| `/docs` | the interactive API page |
+
+`/docs` being live is worth noticing: anyone can now explore your API. That is
+often what you want, and occasionally what you do not — real services put
+authentication in front of it.
+
+---
+
+## 4.7 Adding your API key in production
+
+Your deployed application is running with `USE_MOCK=true`, which is why it
+needed no key.
+
+If you have one:
+
+1. In Render, open your service → **Environment**
+2. Find **`ANTHROPIC_API_KEY`** — it exists with no value, because of
+   `sync: false`
+3. Paste your key in and **Save**
+4. In your own `render.yaml`, change `USE_MOCK` to `"false"`
+5. Commit and push
+
+That fifth step is not optional, and here is why.
+
+> ### The dashboard does not always win
+>
+> Changing `USE_MOCK` in Render's dashboard **will not work**. `render.yaml`
+> gives it a `value:`, and the file is the source of truth.
+>
+> I lost fifteen minutes to this while preparing this workshop: changed the
+> value in the dashboard, watched, and nothing happened.
+>
+> **The rule once you use a configuration file:**
+> settings with a `value:` in the file → change the file and push.
+> settings with `sync: false` → change them in the dashboard.
+
+---
+
+## 4.8 Updating your application
+
+This is the part that makes deployment worth doing properly.
+
+```
+git add .
+```
+
+```
+git commit -m "what you changed"
+```
+
+```
+git push
+```
+
+That is it. Render notices the push and rebuilds automatically. A minute or two
+later your change is live.
+
+You now have a real development cycle: **edit locally → test locally → commit →
+push → it is live.**
+
+---
+
+## 4.9 Things that will surprise you
+
+### Your app falls asleep
+
+Free services stop after about **15 minutes** with no visitors. The next person
+to arrive waits **30 to 60 seconds** while it wakes up, staring at a blank tab.
+
+Nothing is broken. It is how free tiers work.
+
+**Before any demonstration, open your own link ten minutes early.** It costs
+nothing and it means your visitor gets an awake server.
+
+### Your stored readings disappear
+
+Free plans give your service a **temporary disk**. Every deploy gives you a
+fresh one, and `readings.db` is on it.
+
+Your application still works perfectly. The history is just empty again.
+
+If data must survive, that is the moment to add a managed database — Render
+offers a free PostgreSQL instance. It is a change to how you connect, not to
+your application's logic.
+
+### The build failed
+
+Open the **Logs** tab and read from the top. The first error is the real one.
+
+| Log says | Usually means |
+|---|---|
+| `ERROR: Could not find a version...` | a typo or wrong version in `requirements.txt` |
+| `ModuleNotFoundError` | a package you use is missing from `requirements.txt` |
+| `No such file or directory: 'static'` | the `static` folder was not committed |
+| service starts then stops | `startCommand` is wrong, or the port is hardcoded |
+| `yaml: line N` | indentation in `render.yaml` — YAML is strict about spaces |
+
+### It works locally but not deployed
+
+The usual cause is something that exists on your machine and not on the server:
+
+- a package installed but missing from `requirements.txt`
+- a file that `.gitignore` excluded — check with `git status`
+- a setting that is in your `.env` but not in Render's Environment tab
+- anything pointing at `localhost`, which on a server means **the server**
+
+---
+
+## What you have now
+
+```
+   your laptop  ──push──▶  GitHub  ──reads──▶  Render  ──serves──▶  anyone
+```
+
+- A repository with your project's full history
+- An application running on a machine that never sleeps
+- A public address that works from any device, anywhere
+- HTTPS, a health check, and automatic restarts, none of which you configured
+- A one-command update cycle
+
+**Part 5** covers where to take it next, and how the other workshops in this
+series plug into what you have just built.

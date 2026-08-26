@@ -89,26 +89,34 @@ does not ask for a card.
 If you do have an AI key, a section shows you how to use it, and what it costs.
 (Roughly one tenth of a cent per request.)
 
-## The five parts
+## The six parts
 
 | Part | What it covers | Code? |
 |---|---|---|
 | **0** | Setting up your computer, from nothing | no |
 | **1** | What these technologies actually are | no |
-| **2** | Building the application, in five stages | yes |
-| **3** | Putting it on the internet | yes |
-| **4** | Where to go next | yes |
+| **2** | **The fast path** — a model out of a notebook and online in 20 minutes | yes |
+| **3** | Building the full application, in five stages | yes |
+| **4** | Putting it on the internet | yes |
+| **5** | Where to go next | yes |
 
 **Parts 0 and 1 contain no code.** If you already have Python, VS Code and Git
 working, and you know what a server and an API are, start at Part 2.
+
+**There are two paths, and they are both real.** Part 2 gets a trained model
+online in about twenty minutes with no HTML and no server code. Part 3 builds a
+full application that a device can send readings to. Which you need depends on
+your project, and Part 2 ends with a table that decides it.
 
 ## The companion repository
 
 **<https://github.com/Shamsu3100/demon->**
 
-Every stage of Part 2 exists there as a complete, working folder:
+The fast path lives in `fastpath/`, and every stage of Part 3 is a complete,
+working folder:
 
 ```
+fastpath/         the notebook, the model, and the Gradio app
 stages/stage1     a server that answers
 stages/stage2     the web page appears
 stages/stage3     your code decides

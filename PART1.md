@@ -94,10 +94,10 @@ That is the whole idea. Not a special kind of machine — an ordinary computer
 with a boring job and a permanent address.
 
 For most of this workshop, **the server is your own laptop.** You will run one
-in Part 2 and visit it in your own browser. It is a real server; it is just not
+in Part 3 and visit it in your own browser. It is a real server; it is just not
 reachable by anyone else.
 
-Deploying, in Part 3, means moving that same program onto a computer that never
+Deploying, in Part 4, means moving that same program onto a computer that never
 sleeps and does have a public address.
 
 ### What a port is
@@ -118,7 +118,7 @@ Two things to remember:
    something else is already there — usually a server you forgot to stop.
 2. **`localhost` is relative.** On your laptop it means your laptop. On a
    server it means the server. This causes a real and confusing bug, covered in
-   Part 4.
+   Part 5.
 
 ---
 
@@ -347,9 +347,9 @@ that can, and reads the answer.
 
 You send text. You get text back. Your own machine does almost no work.
 
-> **Note:** smaller AI models *can* run on a laptop — Part 4 covers this. But
+> **Note:** smaller AI models *can* run on a laptop — Part 5 covers this. But
 > they need several gigabytes of memory, which is more than free hosting
-> provides. That trade-off is a real decision, and Part 4 explains it.
+> provides. That trade-off is a real decision, and Part 5 explains it.
 
 ### Two APIs, two directions
 
@@ -357,7 +357,7 @@ Worth being clear about, because the word gets used for both:
 
 - Today you **use** an API — you call an AI company's service
 - Today you also **build** one — your `/readings` endpoint is an API, and in
-  Part 4 a microcontroller calls it exactly as you called the AI company's
+  Part 5 a microcontroller calls it exactly as you called the AI company's
 
 Same idea, opposite ends.
 
@@ -641,4 +641,5 @@ worth re-reading before Part 2.
 
 ---
 
-**Part 2** builds it, in six stages. Each stage runs before we move to the next.
+**Part 2** is the fast path: a model out of a notebook and onto the internet in
+twenty minutes. **Part 3** then builds the full application.
