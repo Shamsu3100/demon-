@@ -11,3 +11,6 @@ __pycache__/
 *.log
 *.jpg
 ~$*
+
+# personal practice folders
+sensor triage/
