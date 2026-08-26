@@ -613,9 +613,29 @@ component is good at, and do not route work to the wrong one.
 A file called exactly `.env` in your project folder:
 
 ```
-USE_MOCK=true
+# Copy this file to .env and edit it. Never commit .env
+#
+# Which AI service to use:
+#   mock       no key needed, canned replies. Good for building and testing.
+#   anthropic  Claude
+#   openai     ChatGPT
+#   deepseek   DeepSeek
+#   gemini     Google Gemini
+#   groq       Groq
+#   ollama     a model running on your own machine (no key needed)
+AI_PROVIDER=mock
+
+# Only the one matching AI_PROVIDER is read.
 ANTHROPIC_API_KEY=
-CLAUDE_MODEL=claude-haiku-4-5
+OPENAI_API_KEY=
+DEEPSEEK_API_KEY=
+GEMINI_API_KEY=
+GROQ_API_KEY=
+
+# Optional. Each provider has a sensible default.
+# ANTHROPIC_MODEL=claude-haiku-4-5
+# OPENAI_MODEL=gpt-4o-mini
+# DEEPSEEK_MODEL=deepseek-chat
 ```
 
 > **Windows:** if you did not turn on file extensions in Part 0, Notepad will
@@ -645,16 +665,16 @@ Everything to do with the AI lives in its own file — including the key.
 ```python
 """Everything to do with the AI provider lives in this one file.
 
-It is also the only file that ever touches the API key.
+It is also the only file that ever touches an API key.
+
+Set AI_PROVIDER in .env to choose. Nothing else in the application changes.
 """
+import json
 import os
 
-import anthropic
 from pydantic import BaseModel, Field
 
-# Read settings from the environment. Never write a key into your code.
-USE_MOCK = os.getenv("USE_MOCK", "true").lower() == "true"
-MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-5")
+PROVIDER = os.getenv("AI_PROVIDER", "mock").lower()
 
 SYSTEM = (
     "You explain sensor readings to a maintenance engineer. "
@@ -663,54 +683,110 @@ SYSTEM = (
 
 
 class Advice(BaseModel):
-    """The shape of the answer we require.
-
-    Because we hand this to the API, the model is forced to reply with
-    exactly these two fields. We never have to parse loose text.
-    """
+    """The shape of the answer we require, whichever provider produces it."""
     reason: str = Field(description="why the reading is at this level, under 15 words")
     action: str = Field(description="one concrete next step, under 10 words")
 
 
-def explain(sensor: str, value: float, unit: str,
-            low: float, high: float, severity: str) -> Advice:
-    """Ask the AI to put the reading into words."""
+# Providers that speak the OpenAI protocol. Only the address and the model
+# name differ, which is why one function serves all of them.
+OPENAI_COMPATIBLE = {
+    "openai":   ("https://api.openai.com/v1",           "OPENAI_API_KEY",   "gpt-4o-mini"),
+    "deepseek": ("https://api.deepseek.com/v1",         "DEEPSEEK_API_KEY", "deepseek-chat"),
+    "gemini":   ("https://generativelanguage.googleapis.com/v1beta/openai/",
+                 "GEMINI_API_KEY",  "gemini-2.0-flash"),
+    "groq":     ("https://api.groq.com/openai/v1",      "GROQ_API_KEY",     "llama-3.3-70b-versatile"),
+    "ollama":   ("http://localhost:11434/v1",           "OLLAMA_API_KEY",   "llama3.2:3b"),
+}
 
-    if USE_MOCK:
-        return Advice(
-            reason=f"{value}{unit} against a safe range of {low}-{high}{unit}.",
-            action="Set USE_MOCK=false to get a real AI answer.",
-        )
 
-    prompt = (
+def _prompt(sensor, value, unit, low, high, severity):
+    return (
         f"A {sensor} sensor reads {value}{unit}. "
         f"Its safe range is {low}{unit} to {high}{unit}. "
         f"An automatic check rated this {severity}."
     )
 
-    client = anthropic.Anthropic()      # reads ANTHROPIC_API_KEY from the environment
+
+def _mock(sensor, value, unit, low, high, severity):
+    return Advice(
+        reason=f"{value}{unit} against a safe range of {low}-{high}{unit}.",
+        action="Set AI_PROVIDER to a real provider for a written answer.",
+    )
+
+
+def _anthropic(sensor, value, unit, low, high, severity):
+    """Anthropic's own SDK. output_format guarantees the two fields."""
+    import anthropic
+
+    client = anthropic.Anthropic()      # reads ANTHROPIC_API_KEY
     response = client.messages.parse(
-        model=MODEL,
+        model=os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5"),
         max_tokens=256,
         system=SYSTEM,
-        messages=[{"role": "user", "content": prompt}],
-        output_format=Advice,           # this is what forces the two fields
+        messages=[{"role": "user",
+                   "content": _prompt(sensor, value, unit, low, high, severity)}],
+        output_format=Advice,
     )
     return response.parsed_output
+
+
+def _openai_compatible(sensor, value, unit, low, high, severity):
+    """OpenAI, DeepSeek, Gemini, Groq and a local Ollama all speak this."""
+    from openai import OpenAI
+
+    base_url, key_name, default_model = OPENAI_COMPATIBLE[PROVIDER]
+    api_key = os.getenv(key_name) or "not-needed"      # Ollama needs no key
+    model = os.getenv(f"{PROVIDER.upper()}_MODEL", default_model)
+
+    client = OpenAI(base_url=base_url, api_key=api_key)
+    completion = client.chat.completions.create(
+        model=model,
+        max_tokens=256,
+        response_format={"type": "json_object"},       # ask for JSON, not prose
+        messages=[
+            {"role": "system",
+             "content": SYSTEM + ' Reply as JSON: {"reason": "...", "action": "..."}'},
+            {"role": "user",
+             "content": _prompt(sensor, value, unit, low, high, severity)},
+        ],
+    )
+    return Advice(**json.loads(completion.choices[0].message.content))
+
+
+def explain(sensor: str, value: float, unit: str,
+            low: float, high: float, severity: str) -> Advice:
+    """Ask the configured provider to put the reading into words."""
+    if PROVIDER == "mock":
+        return _mock(sensor, value, unit, low, high, severity)
+    if PROVIDER == "anthropic":
+        return _anthropic(sensor, value, unit, low, high, severity)
+    if PROVIDER in OPENAI_COMPATIBLE:
+        return _openai_compatible(sensor, value, unit, low, high, severity)
+
+    raise RuntimeError(
+        f"Unknown AI_PROVIDER '{PROVIDER}'. Use one of: "
+        f"mock, anthropic, {', '.join(OPENAI_COMPATIBLE)}"
+    )
 ```
 
 ### Three things worth noticing
 
-**1. `anthropic.Anthropic()` takes no arguments.** It finds `ANTHROPIC_API_KEY`
-in the environment by itself. **The key appears nowhere in your code.**
+**1. No client is given a key in code.** Each one reads it from the environment
+by itself. **A key appears nowhere in your source.**
 
 **2. `output_format=Advice` guarantees the reply.** The model cannot return a
 paragraph, a refusal, or a differently named field. You get a validated object
 back. Without this you would be writing code to find the useful part of some
 prose, and that code breaks constantly.
 
-**3. `USE_MOCK` means the whole application runs with no key at all.** You can
-build, test, and even deploy before you have an account.
+**3. One setting switches provider.** `AI_PROVIDER=mock` runs with no key at all.
+`anthropic`, `openai`, `deepseek`, `gemini`, `groq` and a local `ollama` all work
+from the same application — because OpenAI, DeepSeek, Gemini and Groq share one
+protocol, so a single function serves all four with a different address.
+
+**This is the seam paying off.** Changing provider edits one file. Nothing else
+in the application notices.
 
 ### Wire it into `main.py`
 
@@ -793,11 +869,18 @@ account at all.**
 
 ### Using a real key
 
-If you have one, put it in `.env` and restart:
+If you have one, set the provider and its key in `.env`, then restart:
 
 ```
-USE_MOCK=false
+AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-api03-...
+```
+
+or
+
+```
+AI_PROVIDER=deepseek
+DEEPSEEK_API_KEY=sk-...
 ```
 
 Send another reading. The explanation is now written by the model.

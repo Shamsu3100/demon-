@@ -72,8 +72,8 @@ services:
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health      # Render calls this to check the app is alive
     envVars:
-      - key: USE_MOCK
-        value: "true"             # change to "false" once you have added a key
+      - key: AI_PROVIDER
+        value: "mock"             # change to a provider once you have added a key
 
       # 'sync: false' means: this setting exists, but its value is typed
       # into the Render dashboard, never written in this file.
@@ -369,7 +369,7 @@ authentication in front of it.
 
 ## 4.7 Adding your API key in production
 
-Your deployed application is running with `USE_MOCK=true`, which is why it
+Your deployed application is running with `AI_PROVIDER=true`, which is why it
 needed no key.
 
 If you have one:
@@ -378,14 +378,14 @@ If you have one:
 2. Find **`ANTHROPIC_API_KEY`** — it exists with no value, because of
    `sync: false`
 3. Paste your key in and **Save**
-4. In your own `render.yaml`, change `USE_MOCK` to `"false"`
+4. In your own `render.yaml`, change `AI_PROVIDER` to `"false"`
 5. Commit and push
 
 That fifth step is not optional, and here is why.
 
 > ### The dashboard does not always win
 >
-> Changing `USE_MOCK` in Render's dashboard **will not work**. `render.yaml`
+> Changing `AI_PROVIDER` in Render's dashboard **will not work**. `render.yaml`
 > gives it a `value:`, and the file is the source of truth.
 >
 > I lost fifteen minutes to this while preparing this workshop: changed the
