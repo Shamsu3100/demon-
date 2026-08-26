@@ -1,0 +1,2 @@
+Reading,Safe range: lowest,Safe range: highest,Severity,What it means,timestamp
+10,20,10,WARNING,Outside the safe range. Worth checking.,2026-08-26 13:26:38.934623

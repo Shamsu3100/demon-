@@ -78,7 +78,13 @@ what to feed a model matters more than which model you choose.
 
 ---
 
-## 2.3 Step 2 — Wrap it in an interface
+## 2.3 Step 2 — Wrap the model in an interface
+
+Two libraries do this job. Both take a Python function and build a web page
+around it. Choose either; the model file and everything before this point is
+identical.
+
+### Option A — Gradio
 
 Create `app.py` next to `model.pkl`:
 
@@ -128,8 +134,6 @@ if __name__ == "__main__":
     demo.launch()
 ```
 
-Install and run:
-
 ```
 pip install gradio scikit-learn joblib
 ```
@@ -140,65 +144,138 @@ python app.py
 
 Open <http://127.0.0.1:7860>.
 
-**You have a working interface.** Input boxes, a button, results, and clickable
-examples — from about thirty lines, with no HTML and no CSS.
+### Option B — Streamlit
 
-> **What Gradio is doing:** you gave it a Python function and described its
-> inputs and outputs. It built the web page for you.
->
-> **Streamlit** does the same job with a different style of code. Either is a
-> good choice. Gradio is slightly better suited to "one function, some inputs,
-> some outputs", which is exactly what a model is.
+Create `streamlit_app.py`:
+
+```python
+import joblib
+import streamlit as st
+
+model = joblib.load("model.pkl")
+
+SEVERITY_NOTE = {
+    "normal":   "Inside the safe range.",
+    "warning":  "Outside the safe range. Investigation recommended.",
+    "critical": "Far outside the safe range. Immediate action required.",
+}
+SEVERITY_COLOUR = {"normal": "green", "warning": "orange", "critical": "red"}
+
+st.title("Sensor Triage")
+st.caption("Enter a reading and its safe operating range. "
+           "A trained model determines the severity.")
+
+value = st.number_input("Reading", value=39.4)
+low = st.number_input("Safe range: lowest", value=36.1)
+high = st.number_input("Safe range: highest", value=37.2)
+
+if st.button("Check reading", type="primary"):
+    span = (high - low) or 1
+    position = (value - low) / span          # the same feature used in training
+    severity = model.predict([[position]])[0]
+
+    st.markdown(f"### :{SEVERITY_COLOUR[severity]}[{severity.upper()}]")
+    st.write(SEVERITY_NOTE[severity])
+    st.caption(f"position in range: {position:.2f}  "
+               f"(0.0 = lowest, 1.0 = highest)")
+```
+
+```
+pip install streamlit scikit-learn joblib
+```
+
+```
+streamlit run streamlit_app.py
+```
+
+Open <http://localhost:8501>.
+
+### The difference between them
+
+| | Gradio | Streamlit |
+|---|---|---|
+| Style | describe inputs and outputs, pass a function | write the page top to bottom |
+| Best suited to | one function with fixed inputs — a model | dashboards, charts, several sections |
+| Reruns | only your function, on submit | the whole script, on every interaction |
+| Free hosting | Render, or Hugging Face Spaces (paid, see below) | **Streamlit Community Cloud** |
+
+Both are good. **Streamlit currently has the better free hosting route**, which
+is the deciding factor for this workshop.
+
+> Note the `position` calculation appears in the training notebook and again in
+> the application. Whatever you compute before training, you must compute again
+> before predicting. Getting this wrong produces an application that runs
+> perfectly and returns nonsense.
 
 ---
 
-## 2.4 Step 3 — Put it on the internet
+## 2.4 Step 3 — Deploy it
 
-**Hugging Face Spaces** hosts this kind of application free, with no credit card.
+### The current free options
 
-1. Create an account at **<https://huggingface.co/join>**
-2. Go to **<https://huggingface.co/new-space>**
-3. Give it a name, choose **Gradio**, choose the **free** hardware, click
-   **Create Space**
-4. On the **Files** tab, click **Add file → Upload files**
-5. Upload three files:
+Checked August 2026. **Verify before you rely on any of them** — free tiers
+change, sometimes without notice.
+
+| | Runs | Free | Requires |
+|---|---|---|---|
+| **Streamlit Community Cloud** | Streamlit | **yes** | a GitHub repository |
+| **Render** | either | **yes** | a GitHub repository |
+| Hugging Face Spaces — Static | HTML only | yes | cannot run Python |
+| Hugging Face Spaces — Gradio | Gradio | **no, paid plan** | — |
+| Hugging Face Spaces — Docker | anything | **no, paid plan** | — |
+
+> **Hugging Face Spaces changed.** It was the simplest route for a Gradio
+> application: upload three files through a web page, no repository needed.
+> Gradio and Docker Spaces now require a paid subscription. Only Static Spaces
+> remain free, and those cannot run Python, so they cannot run a model.
+>
+> This is worth noticing as a general lesson rather than an inconvenience.
+> **Free tiers move.** Anything you build should survive its host changing
+> terms — which is an argument for keeping your model and your logic separate
+> from whatever wraps them.
+
+### Deploying to Streamlit Community Cloud
+
+1. Put these three files in a GitHub repository:
 
 ```
-app.py             your interface
-model.pkl          your trained model
-requirements.txt   what to install
+streamlit_app.py     your interface
+model.pkl            your trained model
+requirements.txt     what to install
 ```
 
-`requirements.txt` is three lines:
+`requirements.txt`:
 
 ```
-gradio
+streamlit
 scikit-learn
 joblib
 ```
 
-6. Wait about two minutes while it builds
+2. Go to **<https://share.streamlit.io>** and sign in with GitHub
+3. Click **Create app**, then **Deploy a public app from GitHub**
+4. Choose your repository, branch, and `streamlit_app.py` as the main file
+5. Click **Deploy**
 
-**Your application is live**, at an address like:
+The build takes two to three minutes. Your application is then live at an
+address ending in `.streamlit.app`.
 
+**Limits:** approximately 1 GB of memory, and the application sleeps after
+about 12 hours without visitors. That sleep window is considerably more
+forgiving than most free hosting, which is useful for an exhibition.
+
+### Deploying Gradio instead
+
+Gradio is an ordinary Python web application, so any platform hosting Python
+will run it — including Render, which we use in Part 4. Add a `render.yaml`
+with:
+
+```yaml
+startCommand: python app.py
 ```
-https://huggingface.co/spaces/your-name/sensor-triage
-```
 
-Open it on your phone. Send it to someone.
-
-> **No git, no terminal, no configuration file.** You uploaded three files
-> through a web page. For a model demonstration, this is genuinely the fastest
-> route that exists.
-
-### The other rapid options
-
-| | What it is | Note |
-|---|---|---|
-| **Hugging Face Spaces** | free hosting for Gradio and Streamlit apps | best fit for a model demo |
-| **Streamlit Community Cloud** | free hosting for Streamlit apps | connects to GitHub instead of uploads |
-| **Render** | free hosting for anything | what we use in Part 4 |
-| **Vercel** | free hosting, strongest for JavaScript front ends | Python support is limited |
+and set `server_name="0.0.0.0"` and `server_port` from the `PORT` environment
+variable in `demo.launch()`. Part 4 covers what those two settings mean.
 
 ---
 
@@ -207,7 +284,7 @@ Open it on your phone. Send it to someone.
 Everything above is real, and for some projects it is all you need. Be clear
 about the ceiling before you commit to it.
 
-| | Fast path (Gradio + Spaces) | Full path (Part 3) |
+| | Fast path (Gradio or Streamlit) | Full path (Part 3) |
 |---|---|---|
 | Time to a public URL | **20 minutes** | about an hour |
 | HTML or server code | **none** | some |
@@ -220,7 +297,7 @@ about the ceiling before you commit to it.
 
 **The row that decides it is the middle one.**
 
-Gradio builds a page for a *person* to fill in. It does not give you an address
+Both Gradio and Streamlit build a page for a *person* to fill in. Neither gives you an address
 a microcontroller can POST to. If your Project Nexus prototype has an ESP32
 sending sensor readings, this path cannot receive them, and no amount of
 configuration changes that.
