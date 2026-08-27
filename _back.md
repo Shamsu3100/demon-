@@ -160,7 +160,7 @@ builds install the same thing.
 | `ModuleNotFoundError` | package missing, or venv not active | activate the venv, then `pip install` |
 | `Address already in use` | an old server is still running | stop it, or `--reload --port 8001` |
 | `/health` returns your HTML page | `app.mount("/")` is above your endpoints | move it to the last line of the file |
-| `no such column: reason` | the table was made before you added columns | delete `readings.db` and restart |
+| `no column named reason` | the table was created at an earlier stage | add the `ALTER TABLE` migration, or delete `readings.db` |
 | Your `.env` is called `.env.txt` | Windows hides file extensions | turn extensions on, rename it |
 | `422 Unprocessable Entity` | your JSON does not match the `Reading` class | check field names and types |
 | The page loads but Send does nothing | look at the browser console (`F12`) | the error is usually named there |

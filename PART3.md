@@ -815,7 +815,36 @@ Add two columns to the table in `init_db()`:
                 action   TEXT
 ```
 
-**Now delete `readings.db`.** (The trap from Stage 4.)
+That alone is not enough. `CREATE TABLE IF NOT EXISTS` will not alter a table
+that already exists, and yours does — you created it in Stage 4. So add this
+inside `init_db()`, just after the `CREATE TABLE` statement:
+
+```python
+        # A database created at Stage 4 has no reason or action column.
+        # CREATE TABLE IF NOT EXISTS will not add them, so add them here.
+        existing = {row["name"] for row in conn.execute("PRAGMA table_info(readings)")}
+        for column in ("reason", "action"):
+            if column not in existing:
+                conn.execute(f"ALTER TABLE readings ADD COLUMN {column} TEXT")
+```
+
+> ### This is a migration, and every project eventually needs one
+>
+> Your table already holds data. You cannot simply recreate it, and the
+> `CREATE TABLE` statement will not change it. `ALTER TABLE` adds the missing
+> columns to the table that is already there, leaving the existing rows intact.
+>
+> Without this you get:
+>
+> ```
+> sqlite3.OperationalError: table readings has no column named reason
+> ```
+>
+> which names the problem precisely and gives no hint of the cause.
+>
+> **The alternative is to delete `readings.db` and let it be recreated.** That
+> is fine while you are learning and loses everything, which is why real
+> applications migrate instead.
 
 And update `create_reading`:
 

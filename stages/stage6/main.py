@@ -43,6 +43,13 @@ def init_db():
             )
         """)
 
+        # A database created at Stage 4 has no reason or action column.
+        # CREATE TABLE IF NOT EXISTS will not add them, so add them here.
+        existing = {row["name"] for row in conn.execute("PRAGMA table_info(readings)")}
+        for column in ("reason", "action"):
+            if column not in existing:
+                conn.execute(f"ALTER TABLE readings ADD COLUMN {column} TEXT")
+
 
 init_db()
 
