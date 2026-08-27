@@ -60,7 +60,7 @@ most common cause of "but I installed it already".
 ### Install what we need
 
 ```
-pip install "fastapi[standard]" uvicorn python-dotenv anthropic
+pip install "fastapi[standard]" uvicorn python-dotenv anthropic openai
 ```
 
 | Package | What it is for |
@@ -68,7 +68,8 @@ pip install "fastapi[standard]" uvicorn python-dotenv anthropic
 | `fastapi` | the framework — turns Python functions into web addresses |
 | `uvicorn` | the program that actually runs your server |
 | `python-dotenv` | reads your settings file, from Stage 5 |
-| `anthropic` | talks to the AI service, from Stage 5 |
+| `anthropic` | talks to Claude, from Stage 5 |
+| `openai` | talks to OpenAI, DeepSeek, Gemini or Groq |
 
 ### Open the folder in VS Code
 
@@ -717,7 +718,13 @@ def _mock(sensor, value, unit, low, high, severity):
 
 def _anthropic(sensor, value, unit, low, high, severity):
     """Anthropic's own SDK. output_format guarantees the two fields."""
-    import anthropic
+    try:
+        import anthropic
+    except ImportError:
+        raise RuntimeError(
+            "AI_PROVIDER is 'anthropic', which needs the anthropic package. "
+            "Run:  pip install anthropic"
+        ) from None
 
     client = anthropic.Anthropic()      # reads ANTHROPIC_API_KEY
     response = client.messages.parse(
@@ -733,7 +740,13 @@ def _anthropic(sensor, value, unit, low, high, severity):
 
 def _openai_compatible(sensor, value, unit, low, high, severity):
     """OpenAI, DeepSeek, Gemini, Groq and a local Ollama all speak this."""
-    from openai import OpenAI
+    try:
+        from openai import OpenAI
+    except ImportError:
+        raise RuntimeError(
+            f"AI_PROVIDER is '{PROVIDER}', which needs the openai package. "
+            "Run:  pip install openai"
+        ) from None
 
     base_url, key_name, default_model = OPENAI_COMPATIBLE[PROVIDER]
     api_key = os.getenv(key_name) or "not-needed"      # Ollama needs no key

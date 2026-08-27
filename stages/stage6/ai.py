@@ -52,7 +52,13 @@ def _mock(sensor, value, unit, low, high, severity):
 
 def _anthropic(sensor, value, unit, low, high, severity):
     """Anthropic's own SDK. output_format guarantees the two fields."""
-    import anthropic
+    try:
+        import anthropic
+    except ImportError:
+        raise RuntimeError(
+            "AI_PROVIDER is 'anthropic', which needs the anthropic package. "
+            "Run:  pip install anthropic"
+        ) from None
 
     client = anthropic.Anthropic()      # reads ANTHROPIC_API_KEY
     response = client.messages.parse(
@@ -68,7 +74,13 @@ def _anthropic(sensor, value, unit, low, high, severity):
 
 def _openai_compatible(sensor, value, unit, low, high, severity):
     """OpenAI, DeepSeek, Gemini, Groq and a local Ollama all speak this."""
-    from openai import OpenAI
+    try:
+        from openai import OpenAI
+    except ImportError:
+        raise RuntimeError(
+            f"AI_PROVIDER is '{PROVIDER}', which needs the openai package. "
+            "Run:  pip install openai"
+        ) from None
 
     base_url, key_name, default_model = OPENAI_COMPATIBLE[PROVIDER]
     api_key = os.getenv(key_name) or "not-needed"      # Ollama needs no key

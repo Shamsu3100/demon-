@@ -38,7 +38,13 @@ uvicorn[standard]==0.34.0
 pydantic==2.10.4
 python-dotenv==1.0.1
 anthropic==1.0.0
+openai==3.3.1
 ```
+
+> Both AI libraries are listed even though only one is used at a time. The
+> server installs what `requirements.txt` names, and a missing package is only
+> discovered when someone changes `AI_PROVIDER` in the dashboard — by which
+> point the application is already deployed.
 
 To see your own exact versions:
 
